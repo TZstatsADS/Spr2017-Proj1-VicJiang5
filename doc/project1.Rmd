@@ -1,0 +1,218 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  html_document: default
+---
+#Step 0 - Prepare needed packages.
+```{r, warning=FALSE, message=FALSE}
+# setwd("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/")
+library("xml2")
+library("rvest")
+library("dplyr")
+source("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/lib/speechFuncs.R")
+```
+
+#Step 1 - Data harvest and load the file.
+
+Harvest data from http://www.presidency.ucsb.edu/inaugurals.php.
+
+```{r}
+main.page <- read_html(x = "http://www.presidency.ucsb.edu/inaugurals.php")
+# Get link URLs
+inaug=f.speechlinks(main.page) # f.speechlinks is a function for extracting links from the list of speeches.
+inaug=inaug[-nrow(inaug),] # remove the last line, irrelevant due to error.
+inaug.list=read.csv("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/data/InaugurationInfo.csv", stringsAsFactors = FALSE)
+names(inaug.list)[1] <- "President"
+speech.list <- cbind(inaug.list,inaug[,2],stringsAsFactors=F)
+colnames(speech.list)[6] <- "urls"
+```
+
+Read the urls and save it into working directory
+```{r}
+speech.list$fulltext=NA
+for(i in seq(nrow(speech.list))) {
+  text <- read_html(speech.list$urls[i]) %>% # load the page
+    html_nodes(".displaytext") %>% # isloate the text
+    html_text() # get the text
+  speech.list$fulltext[i]=text
+  # Create the file name
+  filename <- paste0("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/output/fulltext/", 
+                     speech.list$type[i],
+                     speech.list$File[i], "-", 
+                     speech.list$Term[i], ".txt")
+  sink(file = filename) %>% # open file to write 
+  cat(text)  # write the file
+  sink() # close the file
+}
+```
+
+#Part 2 - Text analysis
+
+For the main purpose of this program, I collect vocabulary list by 9 grades, and try to compare it with presidents' speech
+I found vocabulary list by grade from https://www.flocabulary.com/wordlists/
+```{r}
+urls <- c("https://www.flocabulary.com/K-vocabulary-word-list/", "https://www.flocabulary.com/1st-grade-vocabulary-word-list/", "https://www.flocabulary.com/2nd-grade-vocabulary-word-list/", "https://www.flocabulary.com/3rd-grade-vocabulary-word-list/", "https://www.flocabulary.com/4th-grade-vocabulary-word-list/", "https://www.flocabulary.com/5th-grade-vocabulary-word-list/", "https://www.flocabulary.com/6th-grade-vocabulary-word-list/", "https://www.flocabulary.com/7th-grade-vocabulary-word-list/", "https://www.flocabulary.com/8th-grade-vocabulary-word-list/")
+```
+
+As different vocabulary lists I harvested from the web have diffenrent messy code, I have to scrap it list by list.
+The chunk below is to define some function and variable for future scrapping.
+```{r}
+level <- list()
+firstmatch <- function(x){
+  return(x[1])
+}
+```
+
+Level 1 list
+```{r}
+level[[1]] <- readLines(urls[1])
+level[[1]] <- level[[1]][grep("[A-Z]?[a-z]+ ?<br>",level[[1]])]
+wordtail <- sapply(gregexpr("<",level[[1]]),firstmatch)
+level[[1]] <- substr(level[[1]],1,wordtail-1)
+```
+
+Level 2 list
+```{r}
+level[[2]] <- readLines(urls[2])
+level[[2]] <- level[[2]][grep("[A-Z]?[a-z]+ ?<br>",level[[2]])]
+wordtail <- sapply(gregexpr("<",level[[2]]),firstmatch)
+level[[2]] <- substr(level[[2]],1,wordtail-1)
+```
+
+Level 3 list
+```{r}
+level[[3]] <- readLines(urls[3])
+level[[3]] <- level[[3]][grep("[A-Z]?[a-z]+ ?<br>",level[[3]])]
+wordstart <- sapply(gregexpr(" ?>?[A-Z]?[a-z]",level[[3]]),firstmatch)
+wordtail <- sapply(gregexpr(" ?<br",level[[3]]),firstmatch)
+level[[3]] <- substr(level[[3]],wordstart,wordtail-1)
+wordstart2 <- sapply(gregexpr(" ",level[[3]]),firstmatch)
+wordstart2[wordstart2==-1] <- 0
+level[[3]] <- substr(level[[3]],wordstart2+1,nchar(level[[3]]))
+wordstart3 <- sapply(gregexpr("p>",level[[3]]),firstmatch)
+level[[3]] <- substr(level[[3]],wordstart3+2,nchar(level[[3]]))
+```
+
+Level 4 list
+```{r}
+level[[4]] <- readLines(urls[4])
+level[[4]] <- level[[4]][grep("[A-Z]?[a-z]<br",level[[4]])]
+wordstart <- sapply(gregexpr(" [A-Z]?[a-z]",level[[4]]),firstmatch)
+wordtail <- sapply(gregexpr("<",level[[4]]),firstmatch)
+level[[4]] <- substr(level[[4]],wordstart+1,wordtail-1)
+```
+
+Level 5 list
+```{r}
+level[[5]] <- readLines(urls[5])
+level[[5]] <- level[[5]][grep("[a-z]<br",level[[5]])]
+wordstart <- sapply(gregexpr(" ?[a-z]+<",level[[5]]),firstmatch)
+wordtail <- sapply(gregexpr("<",level[[5]]),firstmatch)
+level[[5]] <- substr(level[[5]],wordstart,wordtail-1)
+wordstart2 <- sapply(gregexpr(" ",level[[5]]),firstmatch)
+wordstart2[wordstart2==-1] <- 0
+level[[5]] <- substr(level[[5]],wordstart+1,nchar(level[[5]]))
+level[[5]] <- level[[5]][grep("[a-z]",level[[5]])]
+```
+
+Level 6 list
+```{r}
+level[[6]] <- readLines(urls[6])
+level[[6]] <- level[[6]][grep("[A-Z]?[a-z]+<br",level[[6]])]
+wordstart <- sapply(gregexpr("[A-Z]?[a-z]+<br",level[[6]]),firstmatch)
+wordtail <- sapply(gregexpr("[a-z]<br",level[[6]]),firstmatch)
+level[[6]] <- substr(level[[6]],wordstart,wordtail)
+```
+
+Level 7 list
+```{r}
+level[[7]] <- readLines(urls[7])
+level[[7]] <- level[[7]][grep("[A-Z]?[a-z]+<br",level[[7]])]
+wordstart <- sapply(gregexpr("[A-Z]?[a-z]+<br",level[[7]]),firstmatch)
+wordtail <- sapply(gregexpr("[a-z]<br",level[[7]]),firstmatch)
+level[[7]] <- substr(level[[7]],wordstart,wordtail)
+```
+
+Level 8 list
+```{r}
+level[[8]] <- readLines(urls[8])
+level[[8]] <- level[[8]][grep("[A-Z]?[a-z]+<br",level[[8]])]
+wordstart <- sapply(gregexpr("[A-Z]?[a-z]+<br",level[[8]]),firstmatch)
+wordtail <- sapply(gregexpr("[a-z]<",level[[8]]),firstmatch)
+level[[8]] <- substr(level[[8]],wordstart,wordtail)
+```
+
+Level 9 list
+```{r}
+level[[9]] <- readLines(urls[9])
+level[[9]] <- level[[9]][grep("[A-Z]?[a-z]+<br",level[[9]])]
+wordstart <- sapply(gregexpr("[A-Z]?[a-z]+<br",level[[9]]),firstmatch)
+wordtail <- sapply(gregexpr("[a-z]<",level[[9]]),firstmatch)
+level[[9]] <- substr(level[[9]],wordstart,wordtail)
+```
+
+Save the word list into working directory.
+```{r}
+for(i in 1:9){
+  filename <- paste0("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/output/level/", 
+                     "level",
+                     "-", 
+                     i, ".txt")
+  sink(file = filename) %>% # open file to write 
+  cat(level[[i]])  # write the file
+  sink() # close the file
+}
+```
+
+#Part 3 - Word split and compare
+
+As I get the speech list, I will split each speech into words.
+```{r}
+wordlist <- lapply(speech.list$fulltext,strsplit,split="(\\s|[[:punct:]])+")
+wordlist <- lapply(wordlist,unlist)
+names(wordlist) <- speech.list$President
+```
+
+After getting the speech word list, we compare each president's speech word with each level. We hope that the level list is large enough to cover all the words of all the speeches.
+```{r}
+wordlevel <- matrix(NA,nrow = nrow(speech.list),ncol = 9)
+for(i in 1:nrow(speech.list)){
+  for(j in 1:9){
+    for(k in 1:length(level[[j]])){
+      wordlevel[i,j] <- length(grep(level[[j]][k],wordlist[[i]]))
+    }
+  }
+}
+# Compare each level with each president's speech.
+colnames(wordlevel) <- c("level1","level2","level3","level4","level5","level6","level7","level8","level9")
+rownames(wordlevel) <- speech.list$President
+wordlevel <- as.data.frame(wordlevel)
+```
+
+Judge on which level each president's speech is.
+```{r}
+leveljudge <- function(x){
+  return(sum(x*seq(1:9))/sum(x))
+}
+wordlevel$level.judge <- apply(wordlevel,1,leveljudge)
+```
+
+#Part 4 - Compare word level with presidents' historical ranking.
+
+The important part of the project is, I am trying to analize the relationship between each president's word level and their ranking.
+I search the historical ranking from Google and in Wikipedia I found the ranking done by Siena College Research Institute.
+Load president ranking from Wikipedia https://en.wikipedia.org/wiki/Historical_rankings_of_presidents_of_the_United_States#Siena_College_Research_Institute.2C_Presidential_Expert_Poll_of_2010
+```{r}
+president_ranking <- read.csv("F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/data/president_ranking.csv",header = T,stringsAsFactors = F)
+names(president_ranking)[1] <- "President"
+```
+
+Apply linear model on Ranking and word level.
+```{r, message=FALSE}
+level.ranking <- lm(president_ranking$Ranking~wordlevel$level.judge)
+png(filename="F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/output/Ranking_vs_wordlevel.png")
+plot(wordlevel$level.judge,president_ranking$Ranking,xlab = "Avg word level of each president", ylab = "Historical ranking of presidents", main = "Presidents' ranking vs. word level")
+abline(coef(level.ranking),col="red")
+dev.off()
+```
