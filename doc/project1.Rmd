@@ -211,7 +211,7 @@ names(president_ranking)[1] <- "President"
 Apply linear model on Ranking and word level.
 ```{r, message=FALSE}
 level.ranking <- lm(president_ranking$Ranking~wordlevel$level.judge)
-png(filename="F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/output/Ranking_vs_wordlevel.png")
+png(filename="F:/statistics material/5243 applied data science/Spr2017-Proj1-VicJiang5/figs/Ranking_vs_wordlevel.png")
 plot(wordlevel$level.judge,president_ranking$Ranking,xlab = "Avg word level of each president", ylab = "Historical ranking of presidents", main = "Presidents' ranking vs. word level")
 abline(coef(level.ranking),col="red")
 dev.off()
